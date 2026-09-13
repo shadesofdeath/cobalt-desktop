@@ -66,6 +66,7 @@ const DESKTOP_EXTRA_EN: &[(&str, &str)] = &[
     ("save.label.local_instance", "local instance"),
     ("save.label.official_instance", "official instance"),
     ("remux.select_files", "select files"),
+    ("settings.video.youtube.container.h264_webm", "webm can't contain h264 + aac. with the h264 codec, mp4 will be used instead of webm."),
     ("dialog.error.title", "something went wrong"),
     ("dialog.notice.title", "heads up"),
     ("toast.copied", "copied to clipboard"),
@@ -157,7 +158,14 @@ pub fn current_locale() -> String {
 }
 
 /// detects the system language (like the browser's `navigator.language`).
+/// detected once and cached: detection may spawn a process on windows
+static SYSTEM_LOCALE: Lazy<String> = Lazy::new(detect_system_locale);
+
 pub fn system_locale() -> String {
+    SYSTEM_LOCALE.clone()
+}
+
+fn detect_system_locale() -> String {
     let lang = std::env::var("LANG")
         .ok()
         .or_else(|| std::env::var("LC_ALL").ok())

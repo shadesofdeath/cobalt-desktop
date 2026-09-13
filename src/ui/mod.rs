@@ -22,7 +22,10 @@ pub fn show(app: &mut App, root: &mut Ui) {
     let c = Ctx { theme: &theme, icons: &icons };
     app.tick_toasts();
 
-    ctx.all_styles_mut(|s| {
+    let style_key = (theme.dark, app.settings.accessibility.reduce_motion);
+    if app.style_applied != Some(style_key) {
+        app.style_applied = Some(style_key);
+        ctx.all_styles_mut(|s| {
         s.visuals.selection.bg_fill = widgets::with_alpha(theme.accent, 0.35);
         s.visuals.selection.stroke = Stroke::new(1.0, theme.accent);
         s.visuals.text_cursor.stroke = Stroke::new(2.0, theme.accent);
@@ -39,7 +42,8 @@ pub fn show(app: &mut App, root: &mut Ui) {
         s.visuals.widgets.hovered.bg_fill = theme.text_faint;
         s.visuals.widgets.active.bg_fill = theme.text_muted;
         s.animation_time = if app.settings.accessibility.reduce_motion { 0.0 } else { 0.12 };
-    });
+        });
+    }
 
     let ui = root;
     let full = ui.max_rect();

@@ -71,7 +71,12 @@ impl SaveRequest {
             youtube_better_audio: lazy(&s.youtube_better_audio, &d.youtube_better_audio),
             video_quality: lazy(&s.video_quality, &d.video_quality),
             youtube_video_codec: lazy(&s.youtube_video_codec, &d.youtube_video_codec),
-            youtube_video_container: lazy(&s.youtube_video_container, &d.youtube_video_container),
+            // webm can't hold h264/aac: the instance would produce a broken file, so fall back to auto (mp4)
+            youtube_video_container: if s.youtube_video_codec == "h264" && s.youtube_video_container == "webm" {
+                None
+            } else {
+                lazy(&s.youtube_video_container, &d.youtube_video_container)
+            },
             // deprecated in the web app (only sent when ENABLE_DEPRECATED_YOUTUBE_HLS)
             youtube_hls: None,
             allow_h265: lazy(&s.allow_h265, &d.allow_h265),

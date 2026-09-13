@@ -229,6 +229,10 @@ fn video(app: &mut App, c: &Ctx, ui: &mut Ui, w: f32) {
         widgets::divider(ui, c);
         let options = seg_opts(cfg::YOUTUBE_VIDEO_CONTAINER_OPTIONS, |v| v.to_string());
         seg_row(ui, c, &cap(&t("settings.video.youtube.container")), &t("settings.video.youtube.container.description"), &mut s.save.youtube_video_container, &options);
+        if s.save.youtube_video_codec == "h264" && s.save.youtube_video_container == "webm" {
+            let th = c.t();
+            widgets::banner(ui, c, "alert-triangle", th.warning, th.warning_soft, &cap(&t("settings.video.youtube.container.h264_webm")));
+        }
     });
 }
 

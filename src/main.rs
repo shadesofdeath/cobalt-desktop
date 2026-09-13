@@ -157,6 +157,11 @@ fn main() -> eframe::Result {
     if let Some(pos) = args.iter().position(|a| a == "--screenshot") {
         let dir = args.get(pos + 1).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from("screenshots"));
         let live = args.iter().any(|a| a == "--live");
+        if let Some(p) = args.iter().position(|a| a == "--live-link") {
+            if let Some(link) = args.get(p + 1) {
+                let _ = screenshot::TEST_LINK_OVERRIDE.set(link.clone());
+            }
+        }
         plan = Some(screenshot::default_plan(dir, live));
     }
 

@@ -261,13 +261,19 @@ impl CobaltSettings {
         Ok(s)
     }
 
+    /// writes the settings file on a background thread so the ui never waits on disk
     pub fn save(&self) {
         let path = Self::path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
         if let Ok(text) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(path, text);
+            std::thread::spawn(move || {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let tmp = path.with_extension("json.tmp");
+                if std::fs::write(&tmp, text).is_ok() {
+                    let _ = std::fs::rename(&tmp, &path);
+                }
+            });
         }
     }
 

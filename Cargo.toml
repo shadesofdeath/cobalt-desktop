@@ -1,6 +1,6 @@
 [package]
 name = "cobalt-desktop"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "A modern desktop client for cobalt — save video & audio from the web with your own instance"
 authors = ["Berkay AY <shadesofdeath@users.noreply.github.com>"]

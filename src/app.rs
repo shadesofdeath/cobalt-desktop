@@ -208,13 +208,17 @@ pub struct App {
     pub remux_dragging: bool,
     pub copied_at: Option<Instant>,
     pub ffmpeg_path: Option<PathBuf>,
-    pub last_settings_json: String,
+    pub last_settings: CobaltSettings,
+    /// (dark, reduce_motion) the egui style was last configured for
+    pub style_applied: Option<(bool, bool)>,
     pub screenshot: Option<crate::screenshot::Plan>,
     pub ctx: egui::Context,
     /// screenshot / test mode: never write settings to disk
     pub no_persist: bool,
     pub toasts: Vec<Toast>,
     pub activity_open: bool,
+    /// queue items that were already re-requested automatically after a tunnel failure
+    pub auto_retried: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -250,7 +254,7 @@ impl App {
 
         let system_dark = cc.egui_ctx.system_theme().map(|t| t == egui::Theme::Dark).unwrap_or(true);
         let theme = Theme::for_setting(&settings.appearance.theme, system_dark);
-        let last_settings_json = settings.to_json();
+        let last_settings = settings.clone();
 
         let mut app = Self {
             settings,
@@ -281,12 +285,14 @@ impl App {
             remux_dragging: false,
             copied_at: None,
             ffmpeg_path,
-            last_settings_json,
+            last_settings,
+            style_applied: None,
             no_persist: screenshot.is_some(),
             screenshot,
             ctx: cc.egui_ctx.clone(),
             toasts: Vec::new(),
             activity_open: false,
+            auto_retried: std::collections::HashSet::new(),
         };
         app.load_server_info();
         app
@@ -333,25 +339,31 @@ impl App {
         });
     }
 
+    /// called after any ui interaction that may have changed settings.
+    /// cheap when nothing changed; only does the expensive bits for what actually changed.
     pub fn settings_changed(&mut self) {
+        if self.settings == self.last_settings {
+            return;
+        }
         self.settings.validate();
-        let json = self.settings.to_json();
-        if json != self.last_settings_json {
-            self.last_settings_json = json;
-            if !self.no_persist {
-                self.settings.save();
-            }
+        let prev = std::mem::replace(&mut self.last_settings, self.settings.clone());
+        if !self.no_persist {
+            self.settings.save();
+        }
+        if prev.appearance.language != self.settings.appearance.language || prev.appearance.auto_language != self.settings.appearance.auto_language {
             crate::i18n::set_locale(&self.settings.effective_locale());
+        }
+        if prev.desktop.ffmpeg_path != self.settings.desktop.ffmpeg_path {
             let ffmpeg = crate::ffmpeg::find_ffmpeg(&self.settings.desktop.ffmpeg_path);
             self.ffmpeg_path = ffmpeg.clone();
             self.tm.set_ffmpeg(ffmpeg);
-            // api url may have changed: forget the cached instance info
-            if self.server_info.as_ref().map(|i| i.origin.clone()) != Some(self.settings.api_url()) {
-                self.client.clear_server_info();
-                self.server_info = None;
-                self.server_info_error = None;
-                self.load_server_info();
-            }
+        }
+        // api url may have changed: forget the cached instance info
+        if prev.api_url() != self.settings.api_url() {
+            self.client.clear_server_info();
+            self.server_info = None;
+            self.server_info_error = None;
+            self.load_server_info();
         }
     }
 
@@ -907,7 +919,19 @@ impl App {
                         }
                     }
                 }
-                QueueEvent::ItemError(_, _) => {}
+                QueueEvent::ItemError(id, code) => {
+                    // tunnels expire ~90s after the api response; when an item had to wait in the
+                    // queue its tunnels may be stale. re-request once automatically before giving up.
+                    let transient = matches!(
+                        code.as_str(),
+                        "queue.fetch.bad_response" | "queue.fetch.empty_tunnel" | "queue.fetch.network_error"
+                    );
+                    let can_retry = self.tm.state.lock().get(&id).map(|i| i.can_retry && i.original_request.is_some()).unwrap_or(false);
+                    if transient && can_retry && !self.auto_retried.contains(&id) {
+                        self.auto_retried.insert(id.clone());
+                        self.retry_item(&id);
+                    }
+                }
             }
         }
     }

@@ -30,7 +30,12 @@ pub struct Plan {
     pub started: Option<std::time::Instant>,
 }
 
-const TEST_LINK: &str = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+const DEFAULT_TEST_LINK: &str = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+pub static TEST_LINK_OVERRIDE: once_cell::sync::OnceCell<String> = once_cell::sync::OnceCell::new();
+
+fn test_link() -> String {
+    TEST_LINK_OVERRIDE.get().cloned().unwrap_or_else(|| DEFAULT_TEST_LINK.to_string())
+}
 
 fn fake_queue(app: &mut App) {
     app.tm.clear_queue();
@@ -130,7 +135,7 @@ pub fn default_plan(out_dir: PathBuf, live: bool) -> Plan {
         }),
         Scene::new("03-save-link", |app| {
             app.services_expanded = false;
-            app.link = TEST_LINK.into();
+            app.link = test_link();
             app.settings.save.download_mode = "audio".into();
             app.set_button_state(ButtonState::Idle);
         }),
@@ -235,10 +240,13 @@ pub fn default_plan(out_dir: PathBuf, live: bool) -> Plan {
             app.settings.processing.custom_instance_url = "http://localhost:9000".into();
             app.settings.save.download_mode = "auto".into();
             app.settings.save.video_quality = "720".into();
+            if let Ok(lp) = std::env::var("COBALT_TEST_LP") {
+                app.settings.save.local_processing = lp;
+            }
             app.settings.desktop.download_dir = std::env::temp_dir().join("cobalt-desktop-test").to_string_lossy().to_string();
             app.settings_changed();
-            app.link = TEST_LINK.into();
-            app.saving_handler(Some(TEST_LINK.into()), None, None);
+            app.link = test_link();
+            app.saving_handler(Some(test_link()), None, None);
         }));
         scenes.push(Scene::waiting("23-live-downloading", 6.0, |app| {
             app.queue_visible = true; app.activity_open = false;
